@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pricing Admin — Bathroom Estimate | Kerry Bramon Remodeling & Design</title>
+<meta name="theme-color" content="#0D0F10" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'Inter', system-ui, sans-serif; background: #0D0F10; color: #F2F4F4; }
+  input, select { font-family: inherit; }
+  input:focus, select:focus { outline: 2px solid #0099B9; outline-offset: -1px; }
+  button { font-family: inherit; cursor: pointer; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 8px 10px; font-size: 13px; border-bottom: 1px solid #2A2E30; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #8A9598; font-weight: 600; }
+  td input { width: 100%; padding: 6px 8px; border: 1px solid #3A3F42; border-radius: 6px; font-size: 13px; background: #1C2628; color: #F2F4F4; }
+  td select { background: #1C2628; color: #F2F4F4; }
+  td input.num { width: 80px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCOcnwGIwMYqQNL1ZZ7wMcixDVJaGvlp-E",
+    authDomain: "bathroom-estimator.firebaseapp.com",
+    projectId: "bathroom-estimator",
+    storageBucket: "bathroom-estimator.firebasestorage.app",
+    messagingSenderId: "173429378776",
+    appId: "1:173429378776:web:a03aa5bdc2ecab960091ad"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  window.__firebase = {
+    signIn: (email, password) => signInWithEmailAndPassword(auth, email, password),
+    signOut: () => signOut(auth),
+    onAuthStateChanged: (cb) => onAuthStateChanged(auth, cb),
+    loadPricing: async () => {
+      const ref = doc(db, "pricing", "bathroom");
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        const data = snap.data();
+        if (Array.isArray(data.rows)) return data.rows;
+      }
+      return null;
+    },
+    savePricing: async (rows) => {
+      const ref = doc(db, "pricing", "bathroom");
+      await setDoc(ref, { rows, updatedAt: new Date().toISOString() });
+    },
+  };
+
+  window.__firebaseReady = true;
+  window.dispatchEvent(new Event('firebase-ready'));
+</script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo } = React;
+
+// Default pricing — used to seed Firestore the first time, or if Firestore is empty.
+const DEFAULT_ROWS = [
+  { category: "Room Floor", item: "Floor Finish", option: "Tile", unit: "sq ft", good: 12, better: 18, best: 28, notes: "Standard ceramic/porcelain tile, installed" },
+  { category: "Room Floor", item: "Floor Finish", option: "LVP", unit: "sq ft", good: 6, better: 9, best: 14, notes: "Luxury vinyl plank" },
+  { category: "Room Floor", item: "Floor Finish", option: "Cultured Marble", unit: "sq ft", good: 14, better: 20, best: 30, notes: "Seamless cultured marble flooring" },
+
+  { category: "Room Walls", item: "Wall Finish", option: "Paint", unit: "sq ft", good: 2, better: 3, best: 5, notes: "Prep + paint, 2 coats" },
+  { category: "Room Walls", item: "Wall Finish", option: "Tile Wainscot", unit: "sq ft", good: 15, better: 22, best: 32, notes: "Half-wall tile accent" },
+  { category: "Room Walls", item: "Wall Finish", option: "Full Tile", unit: "sq ft", good: 14, better: 20, best: 30, notes: "Full height tile walls" },
+
+  { category: "Shower", item: "Base Material", option: "Tile Base", unit: "sq ft", good: 18, better: 26, best: 38, notes: "Custom tiled shower pan/base" },
+  { category: "Shower", item: "Base Material", option: "Cultured Marble Base", unit: "each", good: 700, better: 1100, best: 1700, notes: "Prefab cultured marble base, per unit" },
+  { category: "Shower", item: "Base Material", option: "Acrylic Base", unit: "each", good: 400, better: 650, best: 950, notes: "Standard acrylic shower pan" },
+
+  { category: "Shower", item: "Wall Surround", option: "Tile Surround", unit: "sq ft", good: 18, better: 26, best: 38, notes: "Tile to 8ft (or ceiling ht if lower)" },
+  { category: "Shower", item: "Wall Surround", option: "Cultured Marble Surround", unit: "sq ft", good: 22, better: 32, best: 46, notes: "Seamless cultured marble panels" },
+  { category: "Shower", item: "Wall Surround", option: "Acrylic Surround", unit: "sq ft", good: 12, better: 16, best: 22, notes: "Prefab acrylic wall kit" },
+
+  { category: "Shower", item: "Tub Unit", option: "Standard Tub", unit: "each", good: 600, better: 950, best: 1500, notes: "Alcove tub, installed" },
+  { category: "Shower", item: "Tub Unit", option: "Soaking Tub", unit: "each", good: 1200, better: 2200, best: 4000, notes: "Freestanding or drop-in soaking tub" },
+
+  { category: "Shower", item: "Enclosure", option: "Shower Curtain Rod", unit: "each", good: 60, better: 90, best: 140, notes: "Basic rod + curtain" },
+  { category: "Shower", item: "Enclosure", option: "Sliding Glass Door", unit: "each", good: 450, better: 750, best: 1200, notes: "Framed or semi-frameless slider" },
+  { category: "Shower", item: "Enclosure", option: "Frameless Glass Door", unit: "each", good: 900, better: 1500, best: 2400, notes: "Frameless hinged glass panel/door" },
+
+  { category: "Vanity", item: "Vanity Cabinet", option: "Standard", unit: "linear ft", good: 150, better: 250, best: 400, notes: "Stock cabinet + laminate/cultured marble top" },
+  { category: "Vanity", item: "Vanity Cabinet", option: "Custom", unit: "linear ft", good: 300, better: 450, best: 700, notes: "Custom/semi-custom cabinet + stone top" },
+
+  { category: "Fixtures", item: "Toilet", option: "Standard", unit: "each", good: 350, better: 500, best: 750, notes: "Standard height, installed" },
+  { category: "Fixtures", item: "Toilet", option: "Comfort Height / Upgraded", unit: "each", good: 500, better: 700, best: 1100, notes: "Comfort height, soft-close, upgraded" },
+
+  { category: "Fixtures", item: "Vanity Faucet", option: "Standard", unit: "each", good: 120, better: 220, best: 380, notes: "Per faucet, installed" },
+  { category: "Fixtures", item: "Vanity Faucet", option: "Designer", unit: "each", good: 250, better: 450, best: 800, notes: "Designer/brand-name faucet" },
+
+  { category: "Fixtures", item: "Shower Trim/Valve", option: "Standard", unit: "each", good: 250, better: 450, best: 750, notes: "Valve + trim + showerhead" },
+  { category: "Fixtures", item: "Shower Trim/Valve", option: "Multi-function/Rain", unit: "each", good: 500, better: 900, best: 1600, notes: "Rain head, handheld, body sprays etc." },
+
+  { category: "Electrical", item: "Electrical Scope", option: "None", unit: "flat", good: 0, better: 0, best: 0, notes: "No electrical changes" },
+  { category: "Electrical", item: "Electrical Scope", option: "Update Fixtures/GFCI", unit: "flat", good: 300, better: 500, best: 800, notes: "Swap fixtures, add GFCI outlet" },
+  { category: "Electrical", item: "Electrical Scope", option: "Add Lighting/Rewire", unit: "flat", good: 800, better: 1400, best: 2200, notes: "New can lights, dedicated circuits, rewiring" },
+
+  { category: "Electrical", item: "Ventilation Fan", option: "Keep Existing", unit: "flat", good: 0, better: 0, best: 0, notes: "No change" },
+  { category: "Electrical", item: "Ventilation Fan", option: "Replace Standard", unit: "flat", good: 250, better: 350, best: 500, notes: "Standard exhaust fan replacement" },
+  { category: "Electrical", item: "Ventilation Fan", option: "Upgrade (Quiet/Humidity Sensor)", unit: "flat", good: 400, better: 600, best: 900, notes: "Premium quiet fan w/ humidity sensor" },
+
+  { category: "Fixtures", item: "Mirror", option: "Standard", unit: "each", good: 100, better: 180, best: 300, notes: "Stock mirror, installed" },
+  { category: "Fixtures", item: "Mirror", option: "Custom/Lighted", unit: "each", good: 300, better: 550, best: 950, notes: "Custom size or LED-lighted mirror" },
+
+  { category: "Fixtures", item: "Accessories Package", option: "Builder Grade", unit: "flat", good: 100, better: 175, best: 275, notes: "Towel bars, hooks, TP holder - basic" },
+  { category: "Fixtures", item: "Accessories Package", option: "Designer", unit: "flat", good: 250, better: 450, best: 750, notes: "Matching designer hardware set" },
+
+  { category: "General", item: "Demo & Disposal", option: "Standard Bath Demo", unit: "flat", good: 600, better: 900, best: 1400, notes: "Demo of existing finishes, dumpster/haul-away" },
+];
+
+const UNITS = ["sq ft", "linear ft", "each", "flat"];
+
+function LoginScreen() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setBusy(true);
+    try {
+      await window.__firebase.signIn(email, password);
+    } catch (err) {
+      setError('Login failed. Check your email and password.');
+    }
+    setBusy(false);
+  };
+
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <form onSubmit={submit} style={{ background: '#16191B', border: '1px solid #2A2E30', borderRadius: 16, padding: 32, maxWidth: 360, width: '100%' }}>
+        <img src="./assets/logo.png" alt="Kerry Bramon Remodeling & Design" style={{ height: 36, display: 'block', marginBottom: 20 }} />
+        <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 600, margin: '0 0 4px' }}>Pricing admin</h1>
+        <div style={{ fontSize: 13, color: '#8A9598', marginBottom: 20 }}>Sign in to edit shared pricing.</div>
+        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#B8C2C4', marginBottom: 6 }}>Email</label>
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
+          style={{ width: '100%', padding: '10px 12px', marginBottom: 14, border: '1px solid #3A3F42', borderRadius: 8, fontSize: 14, background: '#1C2628', color: '#F2F4F4' }} />
+        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#B8C2C4', marginBottom: 6 }}>Password</label>
+        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required
+          style={{ width: '100%', padding: '10px 12px', marginBottom: 16, border: '1px solid #3A3F42', borderRadius: 8, fontSize: 14, background: '#1C2628', color: '#F2F4F4' }} />
+        {error && <div style={{ color: '#B85C5C', fontSize: 13, marginBottom: 12 }}>{error}</div>}
+        <button type="submit" disabled={busy} style={{ width: '100%', padding: '12px 16px', background: '#0099B9', color: '#0D0F10', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600 }}>
+          {busy ? 'Signing in…' : 'Sign in'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function fmt(n) {
+  const num = Number(n);
+  return isNaN(num) ? '$0' : Math.round(num).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+}
+
+function AdminPanel({ user }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saveStatus, setSaveStatus] = useState(null); // null | 'saving' | 'saved' | 'error'
+  const [filter, setFilter] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const remote = await window.__firebase.loadPricing();
+        if (remote && remote.length > 0) {
+          setRows(remote);
+        } else {
+          setRows(DEFAULT_ROWS);
+        }
+      } catch (e) {
+        setRows(DEFAULT_ROWS);
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  const updateRow = (idx, field, value) => {
+    setRows((prev) => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+  };
+
+  const removeRow = (idx) => {
+    if (!window.confirm('Remove this option? This cannot be undone after saving.')) return;
+    setRows((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const addRow = (category, item) => {
+    setRows((prev) => [...prev, { category, item, option: 'New Option', unit: 'each', good: 0, better: 0, best: 0, notes: '' }]);
+  };
+
+  const save = async () => {
+    setSaveStatus('saving');
+    try {
+      // Coerce numeric fields before saving
+      const clean = rows.map((r) => ({
+        category: String(r.category || ''),
+        item: String(r.item || ''),
+        option: String(r.option || ''),
+        unit: String(r.unit || 'each'),
+        good: Number(r.good) || 0,
+        better: Number(r.better) || 0,
+        best: Number(r.best) || 0,
+        notes: String(r.notes || ''),
+      }));
+      await window.__firebase.savePricing(clean);
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus(null), 2500);
+    } catch (e) {
+      setSaveStatus('error');
+    }
+  };
+
+  // Group rows by category > item
+  const grouped = useMemo(() => {
+    const g = {};
+    rows.forEach((r, idx) => {
+      const cat = r.category || 'Uncategorized';
+      const item = r.item || 'Unnamed';
+      if (!g[cat]) g[cat] = {};
+      if (!g[cat][item]) g[cat][item] = [];
+      g[cat][item].push({ ...r, idx });
+    });
+    return g;
+  }, [rows]);
+
+  const filteredGrouped = useMemo(() => {
+    if (!filter.trim()) return grouped;
+    const f = filter.toLowerCase();
+    const out = {};
+    Object.entries(grouped).forEach(([cat, items]) => {
+      const matchedItems = {};
+      Object.entries(items).forEach(([item, opts]) => {
+        if (cat.toLowerCase().includes(f) || item.toLowerCase().includes(f) || opts.some(o => o.option.toLowerCase().includes(f))) {
+          matchedItems[item] = opts;
+        }
+      });
+      if (Object.keys(matchedItems).length > 0) out[cat] = matchedItems;
+    });
+    return out;
+  }, [grouped, filter]);
+
+  if (loading) {
+    return <div style={{ padding: 40, textAlign: 'center', color: '#8A9598' }}>Loading pricing…</div>;
+  }
+
+  return (
+    <div style={{ maxWidth: 1000, margin: '0 auto', padding: '28px 20px 100px' }}>
+      <div style={{ marginBottom: 24 }}>
+        <img src="./assets/logo.png" alt="Kerry Bramon Remodeling & Design" style={{ height: 40, display: 'block' }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#6FA8B8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>Pricing Admin — Bathroom</div>
+          <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 600, margin: 0 }}>Edit shared pricing</h1>
+          <div style={{ fontSize: 13, color: '#8A9598', marginTop: 4 }}>Signed in as {user.email}</div>
+        </div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <a href="./index.html" style={{ fontSize: 13, color: '#B8C2C4', textDecoration: 'underline' }}>View estimator app</a>
+          <button onClick={() => window.__firebase.signOut()} style={{ padding: '10px 16px', background: '#16191B', border: '1px solid #3A3F42', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#B8C2C4' }}>
+            Sign out
+          </button>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 20, flexWrap: 'wrap' }}>
+        <input
+          type="text"
+          placeholder="Filter by category, item, or option…"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          style={{ flex: 1, maxWidth: 360, padding: '10px 12px', border: '1px solid #3A3F42', borderRadius: 8, fontSize: 14, background: '#1C2628', color: '#F2F4F4' }}
+        />
+        <button
+          onClick={save}
+          disabled={saveStatus === 'saving'}
+          style={{ padding: '12px 24px', background: '#0099B9', color: '#0D0F10', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600 }}
+        >
+          {saveStatus === 'saving' ? 'Saving…' : 'Save changes'}
+        </button>
+        {saveStatus === 'saved' && <span style={{ color: '#3DBE8A', fontSize: 13, fontWeight: 600 }}>Saved — live for all reps</span>}
+        {saveStatus === 'error' && <span style={{ color: '#B85C5C', fontSize: 13, fontWeight: 600 }}>Save failed — try again</span>}
+      </div>
+
+      {Object.entries(filteredGrouped).map(([category, items]) => (
+        <div key={category} style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#0099B9', marginBottom: 10, paddingBottom: 6, borderBottom: '2px solid #0099B9' }}>
+            {category}
+          </div>
+          {Object.entries(items).map(([item, opts]) => (
+            <div key={item} style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#B8C2C4', marginBottom: 6 }}>{item}</div>
+              <div style={{ overflowX: 'auto' }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th style={{ minWidth: 160 }}>Option</th>
+                      <th style={{ minWidth: 90 }}>Unit</th>
+                      <th>Good</th>
+                      <th>Better</th>
+                      <th>Best</th>
+                      <th style={{ minWidth: 200 }}>Notes</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {opts.map((o) => (
+                      <tr key={o.idx}>
+                        <td><input value={o.option} onChange={(e) => updateRow(o.idx, 'option', e.target.value)} /></td>
+                        <td>
+                          <select value={o.unit} onChange={(e) => updateRow(o.idx, 'unit', e.target.value)} style={{ width: '100%', padding: '6px 8px', border: '1px solid #3A3F42', borderRadius: 6, fontSize: 13, background: '#1C2628', color: '#F2F4F4' }}>
+                            {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                          </select>
+                        </td>
+                        <td><input className="num" type="number" value={o.good} onChange={(e) => updateRow(o.idx, 'good', e.target.value)} /></td>
+                        <td><input className="num" type="number" value={o.better} onChange={(e) => updateRow(o.idx, 'better', e.target.value)} /></td>
+                        <td><input className="num" type="number" value={o.best} onChange={(e) => updateRow(o.idx, 'best', e.target.value)} /></td>
+                        <td><input value={o.notes} onChange={(e) => updateRow(o.idx, 'notes', e.target.value)} /></td>
+                        <td>
+                          <button onClick={() => removeRow(o.idx)} title="Remove option" style={{ background: 'none', border: 'none', color: '#B85C5C', fontSize: 16, fontWeight: 700, padding: '4px 8px' }}>×</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <button
+                onClick={() => addRow(category, item)}
+                style={{ marginTop: 6, padding: '6px 12px', background: '#16191B', border: '1px solid #3A3F42', borderRadius: 6, fontSize: 12, fontWeight: 600, color: '#B8C2C4' }}
+              >
+                + Add option to "{item}"
+              </button>
+            </div>
+          ))}
+        </div>
+      ))}
+
+      <div style={{ marginTop: 30, padding: 16, background: '#16191B', border: '1px solid #2A2E30', borderRadius: 12, fontSize: 12, color: '#8A9598', lineHeight: 1.6 }}>
+        <strong style={{ color: '#B8C2C4' }}>Unit reference:</strong> "sq ft" = price × calculated square footage. "linear ft" = price × entered linear feet (vanity width). "each" = flat price per unit. "flat" = one flat price if selected, regardless of size.
+        <br /><br />
+        Changes here are saved to the shared pricing database and take effect for every rep the next time they load the estimator (within seconds).
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [user, setUser] = useState(undefined); // undefined = checking, null = signed out
+
+  useEffect(() => {
+    const init = () => {
+      window.__firebase.onAuthStateChanged((u) => setUser(u || null));
+    };
+    if (window.__firebaseReady) init();
+    else window.addEventListener('firebase-ready', init);
+  }, []);
+
+  if (user === undefined) {
+    return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8A9598' }}>Loading…</div>;
+  }
+  if (user === null) {
+    return <LoginScreen />;
+  }
+  return <AdminPanel user={user} />;
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+</body>
+</html>
