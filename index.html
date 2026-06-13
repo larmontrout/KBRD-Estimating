@@ -148,13 +148,22 @@ const DEFAULT_ROWS = [
   ["Fixtures", "Accessories Package", "Designer", "flat", 250, 450, 750, "Matching designer hardware set"],
 
   ["General", "Demo & Disposal", "Standard Bath Demo", "flat", 600, 900, 1400, "Demo of existing finishes, dumpster/haul-away"],
+
+  ["Project Services", "Project Management", "PM Hours", "hours", 85, 85, 85, "Project management time, all tiers", 24],
+  ["Project Services", "Design", "Design Hours", "hours", 100, 100, 100, "Design time, all tiers", 5],
+  ["Project Services", "Estimating", "Estimating Hours", "hours", 85, 85, 85, "Estimating time, all tiers", 6],
 ];
 
 function rowsToPricing(rows) {
   const map = {};
-  rows.forEach(([cat, item, option, unit, good, better, best, notes]) => {
+  rows.forEach(([cat, item, option, unit, good, better, best, notes, hours]) => {
     if (!map[item]) map[item] = { category: cat, options: [] };
-    map[item].options.push({ option, unit, good: Number(good) || 0, better: Number(better) || 0, best: Number(best) || 0, notes: notes || '' });
+    map[item].options.push({
+      option, unit,
+      good: Number(good) || 0, better: Number(better) || 0, best: Number(best) || 0,
+      notes: notes || '',
+      hours: hours !== undefined ? Number(hours) : undefined,
+    });
   });
   return map;
 }
@@ -281,7 +290,7 @@ function BathroomEstimateApp() {
         if (window.__loadPricing) {
           const rows = await window.__loadPricing();
           if (rows && rows.length > 0) {
-            const flat = rows.map((r) => [r.category, r.item, r.option, r.unit, r.good, r.better, r.best, r.notes]);
+            const flat = rows.map((r) => [r.category, r.item, r.option, r.unit, r.good, r.better, r.best, r.notes, r.hours]);
             setPricing(rowsToPricing(flat));
             setPricingSource('remote');
             return;
@@ -295,7 +304,7 @@ function BathroomEstimateApp() {
         if (r.ok) {
           const rows = await r.json();
           if (Array.isArray(rows) && rows.length > 0) {
-            const flat = rows.map((row) => [row.category, row.item, row.option, row.unit, row.good, row.better, row.best, row.notes]);
+            const flat = rows.map((row) => [row.category, row.item, row.option, row.unit, row.good, row.better, row.best, row.notes, row.hours]);
             setPricing(rowsToPricing(flat));
             setPricingSource('file');
             return;
@@ -411,6 +420,16 @@ function BathroomEstimateApp() {
       if (opt) push('Demo & Disposal', opt, 1, '');
     }
 
+    // Project services (PM, Design, Estimating) - always included, hours x rate
+    const pushService = (item, label) => {
+      const opt = findOption(item, getOptions(item)[0]?.option);
+      if (!opt || opt.hours === undefined) return;
+      push(label, opt, opt.hours, `${opt.hours} hrs @ ${fmt(opt.good)}/hr`);
+    };
+    pushService('Project Management', 'Project Management');
+    pushService('Design', 'Design');
+    pushService('Estimating', 'Estimating');
+
     return items;
   }, [pricing, roomSfNum, roomWallSf, floorFinish, wallFinish, showerBase, showerSurround, tubUnit, enclosure,
       vanityType, vanityWidthNum, toiletNew, vanityFaucet, faucetCountNum, showerTrim, electricalScope, ventFan,
@@ -490,9 +509,14 @@ function BathroomEstimateApp() {
     }
     lines.push('');
     lines.push(`SELECTED FINISHES & FIXTURES`);
-    lineItems.forEach((li) => {
+    lineItems.filter((li) => li.label !== 'Project Management' && li.label !== 'Design' && li.label !== 'Estimating').forEach((li) => {
       lines.push(`- ${li.label}: ${li.optionName}${li.qtyLabel ? ` (${li.qtyLabel})` : ''}`);
       if (li.notes) lines.push(`    note: ${li.notes}`);
+    });
+    lines.push('');
+    lines.push(`PROJECT SERVICES`);
+    lineItems.filter((li) => li.label === 'Project Management' || li.label === 'Design' || li.label === 'Estimating').forEach((li) => {
+      lines.push(`- ${li.label}: ${li.qtyLabel} = ${fmt(li.good)}`);
     });
     lines.push('');
     lines.push(`CONCEPT PRICE RANGE`);
@@ -579,7 +603,7 @@ function BathroomEstimateApp() {
           <StepShell title="Room floor finish" hint={`Applies to the full bathroom floor (${roomSfNum.toFixed(0)} sq ft).`}>
             <div style={{ display: 'grid', gap: 10 }}>
               {getOptions('Floor Finish').map((o) => (
-                <OptionCard key={o.option} label={o.option} sub={o.notes} price={`${fmt(o.good)}–${fmt(o.best)}/${o.unit}`} active={floorFinish === o.option} onClick={() => setFloorFinish(o.option)} />
+                <OptionCard key={o.option} label={o.option} sub={o.notes} active={floorFinish === o.option} onClick={() => setFloorFinish(o.option)} />
               ))}
             </div>
           </StepShell>
@@ -590,7 +614,7 @@ function BathroomEstimateApp() {
           <StepShell title="Room wall finish" hint="Applies to room walls outside the shower/tub area (paint, accent tile, etc.).">
             <div style={{ display: 'grid', gap: 10 }}>
               {getOptions('Wall Finish').map((o) => (
-                <OptionCard key={o.option} label={o.option} sub={o.notes} price={`${fmt(o.good)}–${fmt(o.best)}/${o.unit}`} active={wallFinish === o.option} onClick={() => setWallFinish(o.option)} />
+                <OptionCard key={o.option} label={o.option} sub={o.notes} active={wallFinish === o.option} onClick={() => setWallFinish(o.option)} />
               ))}
             </div>
           </StepShell>
@@ -628,7 +652,7 @@ function BathroomEstimateApp() {
           <StepShell title="Shower / tub base material" hint={needsShowerDims ? `Floor area of shower: ${showerFloorSf.toFixed(1)} sf` : 'Standard tub/shower base'}>
             <div style={{ display: 'grid', gap: 10 }}>
               {getOptions('Base Material').map((o) => (
-                <OptionCard key={o.option} label={o.option} sub={o.notes} price={o.unit === 'sq ft' ? `${fmt(o.good)}–${fmt(o.best)}/sf` : `${fmt(o.good)}–${fmt(o.best)} flat`} active={showerBase === o.option} onClick={() => setShowerBase(o.option)} />
+                <OptionCard key={o.option} label={o.option} sub={o.notes} active={showerBase === o.option} onClick={() => setShowerBase(o.option)} />
               ))}
             </div>
           </StepShell>
@@ -639,7 +663,7 @@ function BathroomEstimateApp() {
           <StepShell title="Shower / tub wall surround" hint={needsShowerDims ? `Surround area: ${showerWallSf.toFixed(0)} sf (to ${showerWallHeight}ft)` : 'Standard tub alcove surround (approx.)'}>
             <div style={{ display: 'grid', gap: 10 }}>
               {getOptions('Wall Surround').map((o) => (
-                <OptionCard key={o.option} label={o.option} sub={o.notes} price={o.unit === 'sq ft' ? `${fmt(o.good)}–${fmt(o.best)}/sf` : `${fmt(o.good)}–${fmt(o.best)} flat`} active={showerSurround === o.option} onClick={() => setShowerSurround(o.option)} />
+                <OptionCard key={o.option} label={o.option} sub={o.notes} active={showerSurround === o.option} onClick={() => setShowerSurround(o.option)} />
               ))}
             </div>
           </StepShell>
@@ -650,7 +674,7 @@ function BathroomEstimateApp() {
           <StepShell title="Tub unit" hint="Select the tub being installed.">
             <div style={{ display: 'grid', gap: 10 }}>
               {getOptions('Tub Unit').map((o) => (
-                <OptionCard key={o.option} label={o.option} sub={o.notes} price={`${fmt(o.good)}–${fmt(o.best)}`} active={tubUnit === o.option} onClick={() => setTubUnit(o.option)} />
+                <OptionCard key={o.option} label={o.option} sub={o.notes} active={tubUnit === o.option} onClick={() => setTubUnit(o.option)} />
               ))}
             </div>
           </StepShell>
@@ -661,7 +685,7 @@ function BathroomEstimateApp() {
           <StepShell title="Shower enclosure" hint="Glass, door, or curtain for the shower.">
             <div style={{ display: 'grid', gap: 10 }}>
               {getOptions('Enclosure').map((o) => (
-                <OptionCard key={o.option} label={o.option} sub={o.notes} price={`${fmt(o.good)}–${fmt(o.best)}`} active={enclosure === o.option} onClick={() => setEnclosure(o.option)} />
+                <OptionCard key={o.option} label={o.option} sub={o.notes} active={enclosure === o.option} onClick={() => setEnclosure(o.option)} />
               ))}
             </div>
           </StepShell>
@@ -677,7 +701,7 @@ function BathroomEstimateApp() {
             {vanityWidthNum > 0 && (
               <div style={{ display: 'grid', gap: 10 }}>
                 {getOptions('Vanity Cabinet').map((o) => (
-                  <OptionCard key={o.option} label={o.option} sub={o.notes} price={`${fmt(o.good)}–${fmt(o.best)}/linear ft`} active={vanityType === o.option} onClick={() => setVanityType(o.option)} />
+                  <OptionCard key={o.option} label={o.option} sub={o.notes} active={vanityType === o.option} onClick={() => setVanityType(o.option)} />
                 ))}
               </div>
             )}
@@ -693,7 +717,7 @@ function BathroomEstimateApp() {
             <div style={{ display: 'grid', gap: 10 }}>
               <OptionCard label="Keep existing toilet" active={toiletNew === 'none'} onClick={() => setToiletNew('none')} />
               {getOptions('Toilet').map((o) => (
-                <OptionCard key={o.option} label={o.option} sub={o.notes} price={`${fmt(o.good)}–${fmt(o.best)}`} active={toiletNew === o.option} onClick={() => setToiletNew(o.option)} />
+                <OptionCard key={o.option} label={o.option} sub={o.notes} active={toiletNew === o.option} onClick={() => setToiletNew(o.option)} />
               ))}
             </div>
           </StepShell>
@@ -708,7 +732,7 @@ function BathroomEstimateApp() {
             </div>
             <div style={{ display: 'grid', gap: 10 }}>
               {getOptions('Vanity Faucet').map((o) => (
-                <OptionCard key={o.option} label={o.option} sub={o.notes} price={`${fmt(o.good)}–${fmt(o.best)} each`} active={vanityFaucet === o.option} onClick={() => setVanityFaucet(o.option)} />
+                <OptionCard key={o.option} label={o.option} sub={o.notes} active={vanityFaucet === o.option} onClick={() => setVanityFaucet(o.option)} />
               ))}
             </div>
           </StepShell>
@@ -719,7 +743,7 @@ function BathroomEstimateApp() {
           <StepShell title="Shower fixtures" hint="Valve, trim, and showerhead style.">
             <div style={{ display: 'grid', gap: 10 }}>
               {getOptions('Shower Trim/Valve').map((o) => (
-                <OptionCard key={o.option} label={o.option} sub={o.notes} price={`${fmt(o.good)}–${fmt(o.best)}`} active={showerTrim === o.option} onClick={() => setShowerTrim(o.option)} />
+                <OptionCard key={o.option} label={o.option} sub={o.notes} active={showerTrim === o.option} onClick={() => setShowerTrim(o.option)} />
               ))}
             </div>
           </StepShell>
@@ -730,7 +754,7 @@ function BathroomEstimateApp() {
           <StepShell title="Electrical scope" hint="Any electrical work beyond fixture swaps?">
             <div style={{ display: 'grid', gap: 10 }}>
               {getOptions('Electrical Scope').map((o) => (
-                <OptionCard key={o.option} label={o.option} sub={o.notes} price={o.good === 0 ? 'included' : `${fmt(o.good)}–${fmt(o.best)}`} active={electricalScope === o.option} onClick={() => setElectricalScope(o.option)} />
+                <OptionCard key={o.option} label={o.option} sub={o.notes} active={electricalScope === o.option} onClick={() => setElectricalScope(o.option)} />
               ))}
             </div>
           </StepShell>
@@ -741,7 +765,7 @@ function BathroomEstimateApp() {
           <StepShell title="Ventilation fan" hint="Exhaust fan scope.">
             <div style={{ display: 'grid', gap: 10 }}>
               {getOptions('Ventilation Fan').map((o) => (
-                <OptionCard key={o.option} label={o.option} sub={o.notes} price={o.good === 0 ? 'included' : `${fmt(o.good)}–${fmt(o.best)}`} active={ventFan === o.option} onClick={() => setVentFan(o.option)} />
+                <OptionCard key={o.option} label={o.option} sub={o.notes} active={ventFan === o.option} onClick={() => setVentFan(o.option)} />
               ))}
             </div>
           </StepShell>
@@ -753,7 +777,7 @@ function BathroomEstimateApp() {
             <div style={{ display: 'grid', gap: 10 }}>
               <OptionCard label="Keep existing mirror" active={mirror === 'none'} onClick={() => setMirror('none')} />
               {getOptions('Mirror').map((o) => (
-                <OptionCard key={o.option} label={o.option} sub={o.notes} price={`${fmt(o.good)}–${fmt(o.best)}`} active={mirror === o.option} onClick={() => setMirror(o.option)} />
+                <OptionCard key={o.option} label={o.option} sub={o.notes} active={mirror === o.option} onClick={() => setMirror(o.option)} />
               ))}
             </div>
           </StepShell>
@@ -765,7 +789,7 @@ function BathroomEstimateApp() {
             <div style={{ display: 'grid', gap: 10 }}>
               <OptionCard label="Keep existing accessories" active={accessories === 'none'} onClick={() => setAccessories('none')} />
               {getOptions('Accessories Package').map((o) => (
-                <OptionCard key={o.option} label={o.option} sub={o.notes} price={`${fmt(o.good)}–${fmt(o.best)}`} active={accessories === o.option} onClick={() => setAccessories(o.option)} />
+                <OptionCard key={o.option} label={o.option} sub={o.notes} active={accessories === o.option} onClick={() => setAccessories(o.option)} />
               ))}
             </div>
           </StepShell>
@@ -775,7 +799,7 @@ function BathroomEstimateApp() {
         return (
           <StepShell title="Demo & disposal" hint="Include standard demo and haul-away of existing finishes/fixtures?">
             <div style={{ display: 'grid', gap: 10, maxWidth: 400 }}>
-              <OptionCard label="Yes, include demo & disposal" price={`${fmt(findOption('Demo & Disposal','Standard Bath Demo')?.good || 0)}–${fmt(findOption('Demo & Disposal','Standard Bath Demo')?.best || 0)}`} active={includeDemo === true} onClick={() => setIncludeDemo(true)} />
+              <OptionCard label="Yes, include demo & disposal" active={includeDemo === true} onClick={() => setIncludeDemo(true)} />
               <OptionCard label="No, exclude from this estimate" active={includeDemo === false} onClick={() => setIncludeDemo(false)} />
             </div>
           </StepShell>
@@ -804,7 +828,7 @@ function BathroomEstimateApp() {
                 Scope Summary
               </div>
               <div style={{ display: 'grid', gap: 6 }}>
-                {lineItems.map((li, i) => (
+                {lineItems.filter((li) => li.label !== 'Project Management' && li.label !== 'Design' && li.label !== 'Estimating').map((li, i) => (
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '8px 0', borderBottom: '1px solid #2A2E30' }}>
                     <div>
                       <span style={{ fontWeight: 600 }}>{li.label}:</span> {li.optionName} {li.qtyLabel && <span style={{ color: '#8A9598' }}>({li.qtyLabel})</span>}
@@ -815,6 +839,24 @@ function BathroomEstimateApp() {
                   </div>
                 ))}
                 {lineItems.length === 0 && <div style={{ fontSize: 13, color: '#8A9598' }}>No items selected.</div>}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#6FA8B8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>
+                Project Services
+              </div>
+              <div style={{ display: 'grid', gap: 6 }}>
+                {lineItems.filter((li) => li.label === 'Project Management' || li.label === 'Design' || li.label === 'Estimating').map((li, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '8px 0', borderBottom: '1px solid #2A2E30' }}>
+                    <div>
+                      <span style={{ fontWeight: 600 }}>{li.label}</span> <span style={{ color: '#8A9598' }}>({li.qtyLabel})</span>
+                    </div>
+                    <div style={{ color: '#8A9598', whiteSpace: 'nowrap', marginLeft: 12 }}>
+                      {fmt(li.good)}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 

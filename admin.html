@@ -125,9 +125,13 @@ const DEFAULT_ROWS = [
   { category: "Fixtures", item: "Accessories Package", option: "Designer", unit: "flat", good: 250, better: 450, best: 750, notes: "Matching designer hardware set" },
 
   { category: "General", item: "Demo & Disposal", option: "Standard Bath Demo", unit: "flat", good: 600, better: 900, best: 1400, notes: "Demo of existing finishes, dumpster/haul-away" },
+
+  { category: "Project Services", item: "Project Management", option: "PM Hours", unit: "hours", good: 85, better: 85, best: 85, notes: "Project management time, all tiers", hours: 24 },
+  { category: "Project Services", item: "Design", option: "Design Hours", unit: "hours", good: 100, better: 100, best: 100, notes: "Design time, all tiers", hours: 5 },
+  { category: "Project Services", item: "Estimating", option: "Estimating Hours", unit: "hours", good: 85, better: 85, best: 85, notes: "Estimating time, all tiers", hours: 6 },
 ];
 
-const UNITS = ["sq ft", "linear ft", "each", "flat"];
+const UNITS = ["sq ft", "linear ft", "each", "flat", "hours"];
 
 function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -212,16 +216,22 @@ function AdminPanel({ user }) {
     setSaveStatus('saving');
     try {
       // Coerce numeric fields before saving
-      const clean = rows.map((r) => ({
-        category: String(r.category || ''),
-        item: String(r.item || ''),
-        option: String(r.option || ''),
-        unit: String(r.unit || 'each'),
-        good: Number(r.good) || 0,
-        better: Number(r.better) || 0,
-        best: Number(r.best) || 0,
-        notes: String(r.notes || ''),
-      }));
+      const clean = rows.map((r) => {
+        const out = {
+          category: String(r.category || ''),
+          item: String(r.item || ''),
+          option: String(r.option || ''),
+          unit: String(r.unit || 'each'),
+          good: Number(r.good) || 0,
+          better: Number(r.better) || 0,
+          best: Number(r.best) || 0,
+          notes: String(r.notes || ''),
+        };
+        if (r.hours !== undefined && r.hours !== '' && r.hours !== null) {
+          out.hours = Number(r.hours) || 0;
+        }
+        return out;
+      });
       await window.__firebase.savePricing(clean);
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus(null), 2500);
@@ -318,6 +328,7 @@ function AdminPanel({ user }) {
                       <th>Good</th>
                       <th>Better</th>
                       <th>Best</th>
+                      <th style={{ minWidth: 70 }}>Hours</th>
                       <th style={{ minWidth: 200 }}>Notes</th>
                       <th></th>
                     </tr>
@@ -334,6 +345,7 @@ function AdminPanel({ user }) {
                         <td><input className="num" type="number" value={o.good} onChange={(e) => updateRow(o.idx, 'good', e.target.value)} /></td>
                         <td><input className="num" type="number" value={o.better} onChange={(e) => updateRow(o.idx, 'better', e.target.value)} /></td>
                         <td><input className="num" type="number" value={o.best} onChange={(e) => updateRow(o.idx, 'best', e.target.value)} /></td>
+                        <td><input className="num" type="number" value={o.hours ?? ''} placeholder="—" onChange={(e) => updateRow(o.idx, 'hours', e.target.value)} /></td>
                         <td><input value={o.notes} onChange={(e) => updateRow(o.idx, 'notes', e.target.value)} /></td>
                         <td>
                           <button onClick={() => removeRow(o.idx)} title="Remove option" style={{ background: 'none', border: 'none', color: '#B85C5C', fontSize: 16, fontWeight: 700, padding: '4px 8px' }}>×</button>
